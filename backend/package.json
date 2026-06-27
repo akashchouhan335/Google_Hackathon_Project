@@ -1,0 +1,40 @@
+{
+  "name": "deadline-guardian-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Deadline Guardian AI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "deadline-guardian-ai": "file:..",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-json-schema": "^6.1.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": ["<rootDir>/tests/setupEnv.js"],
+    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
+    "coverageThreshold": {
+      "global": {
+        "branches": 75,
+        "functions": 90,
+        "lines": 90,
+        "statements": 85
+      }
+    }
+  }
+}
