@@ -28,21 +28,10 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/coach', require('./routes/coach'));
 
-// Serve Static Assets in Production
-if (config.NODE_ENV === 'production' || process.env.SERVE_STATIC === 'true') {
-  const frontendDistPath = path.join(__dirname, '../frontend/dist');
-  app.use(express.static(frontendDistPath));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
-  });
-  console.log(`Serving static production build from: ${frontendDistPath}`);
-} else {
-  // Test root route in dev
-  app.get('/', (req, res) => {
-    res.json({ message: 'Deadline Guardian AI Backend API is active.' });
-  });
-}
+// Test root route
+app.get('/', (req, res) => {
+  res.json({ message: 'Deadline Guardian AI Backend API is active.' });
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -50,14 +39,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error occurred.' });
 });
 
-// Start Server
-app.listen(config.PORT, () => {
-  console.log(`==================================================`);
-  console.log(`Deadline Guardian AI Server is running on port ${config.PORT}`);
-  console.log(`Environment: ${config.NODE_ENV}`);
-  console.log(`==================================================`);
-  
-  // Start the background agent to check for overdue tasks
-  const { startDeadlineAgent } = require('./services/deadlineAgent');
-  startDeadlineAgent(30000); // Check every 30 seconds
-});
+// If not required by another module, start server locally
+if (require.main === module) {
+  // Start Server
+  app.listen(config.PORT, () => {
+    console.log(`==================================================`);
+    console.log(`Deadline Guardian AI Server is running on port ${config.PORT}`);
+    console.log(`Environment: ${config.NODE_ENV}`);
+    console.log(`==================================================`);
+    
+    // Start the background agent to check for overdue tasks
+    const { startDeadlineAgent } = require('./services/deadlineAgent');
+    startDeadlineAgent(30000); // Check every 30 seconds
+  });
+}
+
+module.exports = app;
