@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
+import { useData } from '../context/DataContext';
 import { 
   Plus, 
   Search, 
@@ -18,8 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function TaskManagement({ onTriggerToast }) {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { tasks, loading, refreshData, setTasks } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   
   // Detail Drawer and Forms State
@@ -36,27 +36,42 @@ export default function TaskManagement({ onTriggerToast }) {
   });
   const [saving, setSaving] = useState(false);
 
-  const fetchTasks = async () => {
-    try {
-      setLoading(true);
-      const data = await api.tasks.getAll();
-      setTasks(data);
-      
-      // Keep selectedTask reference fresh
-      if (selectedTask) {
-        const fresh = data.find(t => t.id === selectedTask.id);
-        setSelectedTask(fresh || null);
-      }
-    } catch (err) {
-      console.error('Error fetching tasks:', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Keep selectedTask reference fresh when tasks update
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (selectedTask && tasks.length > 0) {
+      const fresh = tasks.find(t => t.id === selectedTask.id);
+      if (fresh) setSelectedTask(fresh);
+    }
+  }, [tasks]);
+
+  // Poll for background AI updates (e.g. when priorityExplanation is 'Analyzing...')
+  useEffect(() => {
+    const analyzingTasks = tasks.filter(t => t.priorityExplanation === 'Analyzing...' && t.status !== 'completed');
+    if (analyzingTasks.length === 0) return;
+
+    const interval = setInterval(async () => {
+      let updatedAny = false;
+      const updatedTasksMap = {};
+
+      for (const t of analyzingTasks) {
+        try {
+          const freshTask = await api.tasks.getById(t.id);
+          if (freshTask && freshTask.priorityExplanation !== 'Analyzing...') {
+            updatedTasksMap[t.id] = freshTask;
+            updatedAny = true;
+          }
+        } catch (err) {
+          console.error('Failed to poll AI update for task:', err);
+        }
+      }
+
+      if (updatedAny) {
+        setTasks(prevTasks => prevTasks.map(t => updatedTasksMap[t.id] || t));
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [tasks, setTasks]);
 
   const handleOpenCreateModal = () => {
     setFormTask({
@@ -91,12 +106,14 @@ export default function TaskManagement({ onTriggerToast }) {
     if (!window.confirm('Are you sure you want to delete this task? All related focus history will be cleared.')) return;
     
     try {
+      setTasks(prevTasks => (prevTasks || []).filter(t => t.id !== id));
       await api.tasks.delete(id);
       onTriggerToast('info', 'Task deleted', 'The task and its associated logs were removed.');
       if (selectedTask?.id === id) setSelectedTask(null);
-      fetchTasks();
+      refreshData(true); // Update analytics in background
     } catch (err) {
       onTriggerToast('error', 'Deletion failed', err.message);
+      refreshData(); // Revert on failure
     }
   };
 
@@ -107,15 +124,18 @@ export default function TaskManagement({ onTriggerToast }) {
     try {
       if (modalMode === 'create') {
         const newTask = await api.tasks.create(formTask);
-        onTriggerToast('success', 'Task Created', `Priority scored at ${newTask.priorityScore}/100.`);
+        setTasks(prevTasks => [...(prevTasks || []), newTask]);
+        onTriggerToast('success', 'Task Created', `AI Agents are analyzing your task...`);
       } else {
         const updated = await api.tasks.update(formTask.id, formTask);
-        onTriggerToast('success', 'Task Updated', `Priority scoring re-evaluated.`);
+        setTasks(prevTasks => (prevTasks || []).map(t => t.id === updated.id ? updated : t));
+        onTriggerToast('success', 'Task Updated', `Task saved.`);
       }
       setIsModalOpen(false);
-      fetchTasks();
+      refreshData(true); // Update analytics in background
     } catch (err) {
       onTriggerToast('error', 'Failed to save task', err.message);
+      refreshData(); // Revert on failure
     } finally {
       setSaving(false);
     }
@@ -123,20 +143,36 @@ export default function TaskManagement({ onTriggerToast }) {
 
   const handleToggleStatus = async (task, e) => {
     if (e) e.stopPropagation();
-    const nextStatus = task.status === 'completed' ? 'pending' : 'completed';
+    
+    let nextStatus = 'completed';
+    if (task.status === 'completed') {
+      const isOverdue = task.deadline && new Date(task.deadline).getTime() < new Date().getTime();
+      nextStatus = isOverdue ? 'incomplete' : 'pending';
+    }
+
     try {
-      await api.tasks.update(task.id, { ...task, status: nextStatus });
+      const optimisticTask = { ...task, status: nextStatus };
+      setTasks(prevTasks => (prevTasks || []).map(t => t.id === task.id ? optimisticTask : t));
+
+      const updated = await api.tasks.update(task.id, optimisticTask);
+      setTasks(prevTasks => (prevTasks || []).map(t => t.id === task.id ? updated : t));
+      
       onTriggerToast('success', 'Task Updated', `Task status changed to ${nextStatus}.`);
-      fetchTasks();
+      refreshData(true); // Update analytics in background
     } catch (err) {
       onTriggerToast('error', 'Failed to update status', err.message);
+      refreshData(); // Revert on failure
     }
   };
 
   const handleUpdateStatus = async (task, newStatus, e) => {
     if (e) e.stopPropagation();
     try {
-      await api.tasks.update(task.id, { ...task, status: newStatus });
+      const optimisticTask = { ...task, status: newStatus };
+      setTasks(prevTasks => (prevTasks || []).map(t => t.id === task.id ? optimisticTask : t));
+
+      const updated = await api.tasks.update(task.id, optimisticTask);
+      setTasks(prevTasks => (prevTasks || []).map(t => t.id === task.id ? updated : t));
       
       let toastTitle = 'Task Updated';
       let toastBody = `Task status changed to ${newStatus === 'in_progress' ? 'In Progress' : newStatus}.`;
@@ -152,9 +188,10 @@ export default function TaskManagement({ onTriggerToast }) {
       }
       
       onTriggerToast('success', toastTitle, toastBody);
-      fetchTasks();
+      refreshData(true); // Update analytics in background
     } catch (err) {
       onTriggerToast('error', 'Failed to update status', err.message);
+      refreshData(); // Revert on failure
     }
   };
 
@@ -168,7 +205,8 @@ export default function TaskManagement({ onTriggerToast }) {
   const categorizedTasks = {
     pending: getFilteredTasks().filter(t => t.status === 'pending'),
     in_progress: getFilteredTasks().filter(t => t.status === 'in_progress'),
-    completed: getFilteredTasks().filter(t => t.status === 'completed')
+    completed: getFilteredTasks().filter(t => t.status === 'completed'),
+    incomplete: getFilteredTasks().filter(t => t.status === 'incomplete')
   };
 
   return (
@@ -200,7 +238,37 @@ export default function TaskManagement({ onTriggerToast }) {
 
       {/* Kanban Board Grid */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '4rem 0' }}>Loading your task desk...</div>
+        <div className="task-board" style={{ opacity: 0.7, pointerEvents: 'none' }}>
+          {[1, 2, 3, 4].map(col => (
+            <div key={col} className="task-column">
+              <div className="column-header" style={{ marginBottom: '1rem' }}>
+                <div className="skeleton" style={{ width: '80px', height: '24px', borderRadius: '4px' }}></div>
+                <div className="skeleton" style={{ width: '24px', height: '24px', borderRadius: '12px' }}></div>
+              </div>
+              {[1, 2].map(card => (
+                <div key={card} className="task-card" style={{ height: '140px', marginBottom: '1rem', border: '1px solid var(--border-color)' }}>
+                  <div className="skeleton" style={{ width: '80%', height: '20px', borderRadius: '4px', marginBottom: '1rem' }}></div>
+                  <div className="skeleton" style={{ width: '60%', height: '16px', borderRadius: '4px', marginBottom: '1.5rem' }}></div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div className="skeleton" style={{ width: '60px', height: '24px', borderRadius: '4px' }}></div>
+                    <div className="skeleton" style={{ width: '60px', height: '24px', borderRadius: '4px' }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+          <style>{`
+            .skeleton {
+              background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+              background-size: 200% 100%;
+              animation: loading 1.5s infinite;
+            }
+            @keyframes loading {
+              0% { background-position: 200% 0; }
+              100% { background-position: -200% 0; }
+            }
+          `}</style>
+        </div>
       ) : (
         <div className="task-board">
           {/* Column 1: Pending */}
@@ -252,6 +320,26 @@ export default function TaskManagement({ onTriggerToast }) {
             
             <div className="task-cards-list">
               {categorizedTasks.completed.map(t => (
+                <TaskCard 
+                  key={t.id} 
+                  task={t} 
+                  onSelect={setSelectedTask} 
+                  onToggleStatus={handleToggleStatus} 
+                  onUpdateStatus={handleUpdateStatus}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Column 4: Incomplete */}
+          <div className="task-column">
+            <div className="column-header">
+              <span className="column-title" style={{ color: 'var(--danger)' }}><X size={16} /> Missed/Incomplete</span>
+              <span className="column-count">{categorizedTasks.incomplete.length}</span>
+            </div>
+            
+            <div className="task-cards-list">
+              {categorizedTasks.incomplete.map(t => (
                 <TaskCard 
                   key={t.id} 
                   task={t} 
@@ -341,6 +429,7 @@ export default function TaskManagement({ onTriggerToast }) {
                       <option value="pending">Pending</option>
                       <option value="in_progress">In Progress</option>
                       <option value="completed">Completed</option>
+                      <option value="incomplete">Incomplete / Missed</option>
                     </select>
                   </div>
                 )}

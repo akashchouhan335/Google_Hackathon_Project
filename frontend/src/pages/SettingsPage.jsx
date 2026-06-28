@@ -11,32 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function SettingsPage({ onTriggerToast }) {
-  const { user, updateSettings } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [formSettings, setFormSettings] = useState({
-    workStartHour: user?.settings?.workStartHour || 9,
-    workEndHour: user?.settings?.workEndHour || 17,
-  });
-
-  const handleSaveSettings = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    if (formSettings.workStartHour >= formSettings.workEndHour) {
-      onTriggerToast('info', 'Invalid settings', 'Work start hour must be before the end hour.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      await updateSettings(formSettings);
-      onTriggerToast('success', 'Settings Saved', 'Your workspace planner parameters were updated.');
-    } catch (err) {
-      onTriggerToast('error', 'Update Failed', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user } = useAuth();
 
   const isGeminiConfigured = false; // We can read this dynamically if we want or just base it on key presence warnings
   // Let's check backend key status. Since we set GEMINI_API_KEY as empty by default in .env, we can assume mock fallback unless the user sets it.
@@ -49,55 +24,7 @@ export default function SettingsPage({ onTriggerToast }) {
         <p style={{ color: 'var(--text-secondary)' }}>Manage your account parameters, planner details, and inspect the AI Multi-Agent status.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2rem' }}>
-        {/* Left Form: Planner Preferences */}
-        <div className="glass-card">
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Clock size={20} color="var(--primary-blue)" /> Daily Planner Hours
-          </h3>
-          
-          <form onSubmit={handleSaveSettings}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-              <div className="form-group">
-                <label>Shift Start Hour (24h format)</label>
-                <select 
-                  className="form-input"
-                  value={formSettings.workStartHour}
-                  onChange={(e) => setFormSettings({ ...formSettings, workStartHour: Number(e.target.value) })}
-                >
-                  {Array.from({ length: 24 }).map((_, h) => (
-                    <option key={h} value={h}>{h.toString().padStart(2, '0')}:00</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Shift End Hour (24h format)</label>
-                <select 
-                  className="form-input"
-                  value={formSettings.workEndHour}
-                  onChange={(e) => setFormSettings({ ...formSettings, workEndHour: Number(e.target.value) })}
-                >
-                  {Array.from({ length: 24 }).map((_, h) => (
-                    <option key={h} value={h}>{h.toString().padStart(2, '0')}:00</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button 
-              type="submit" 
-              className="btn btn-primary"
-              disabled={loading}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-            >
-              <Check size={16} /> {loading ? 'Saving Settings...' : 'Save Preferences'}
-            </button>
-          </form>
-        </div>
-
-        {/* Right Panel: AI Status Diagnostics */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* User profile Summary */}
           <div className="glass-card">
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -127,7 +54,7 @@ export default function SettingsPage({ onTriggerToast }) {
               </div>
               
               <p style={{ color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                Deadline Guardian AI runs five specialized agents. Because no external API key is stored in settings, a high-fidelity local heuristic rules engine simulates calculations.
+                Deadline Guardian AI runs six specialized agents. Because no external API key is stored in settings, a high-fidelity local heuristic rules engine simulates calculations.
               </p>
 
               <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--bg-tertiary)', paddingTop: '0.75rem' }}>
@@ -140,7 +67,6 @@ export default function SettingsPage({ onTriggerToast }) {
               </div>
             </div>
           </div>
-        </div>
       </div>
     </div>
   );

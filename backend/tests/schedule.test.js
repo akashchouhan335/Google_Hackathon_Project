@@ -48,10 +48,10 @@ describe('Schedule Routes', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ availableHours: 4 });
     
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchSchema(scheduleSchema);
+    expect(res.status).toBe(202);
+    expect(res.body.isGenerating).toBe(true);
     expect(res.body.allocation).toBeInstanceOf(Array);
-    expect(res.body.allocation.length).toBeGreaterThan(0);
+    expect(res.body.allocation.length).toBe(0);
   });
 
   it('POST /api/schedule/generate should update existing schedule for the same date', async () => {

@@ -1,11 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/jsonDb');
+const db = require('../db/firestore');
 const auth = require('../middleware/auth');
 
-router.get('/', auth, (req, res) => {
+router.get('/', auth, async (req, res) => {
   const userId = req.user.id;
-  const tasks = db.find('tasks', { userId });
+  
+  const [tasks, focusSessions, rescueModes] = await Promise.all([
+    db.find('tasks', { userId }),
+    db.find('focus_sessions', { userId }),
+    db.find('rescue_modes', { userId })
+  ]);
   
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'completed');
@@ -15,7 +20,6 @@ router.get('/', auth, (req, res) => {
   const highRiskTasks = pendingTasks.filter(t => t.riskScore >= 80);
 
   // 1. Focus Consistency Score: (completed / total started) * 100
-  const focusSessions = db.find('focus_sessions', { userId });
   const startedSessions = focusSessions.filter(s => s.status !== 'active'); // completed or abandoned
   const completedSessions = startedSessions.filter(s => s.status === 'completed');
   const focusConsistency = startedSessions.length > 0
@@ -23,7 +27,6 @@ router.get('/', auth, (req, res) => {
     : 100;
 
   // 2. Rescue Success Rate: (resolved_success / total resolved) * 100
-  const rescueModes = db.find('rescue_modes', { userId });
   const resolvedRescues = rescueModes.filter(r => r.status !== 'active');
   const successfulRescues = resolvedRescues.filter(r => r.status === 'resolved_success');
   const rescueSuccessRate = resolvedRescues.length > 0
@@ -73,7 +76,9 @@ router.get('/', auth, (req, res) => {
 
     // Count tasks completed on this date
     const completedOnDate = completedTasks.filter(t => {
-      const completionDateStr = new Date(t.updatedAt).toISOString().split('T')[0];
+      if (!t.updatedAt && !t.createdAt) return false;
+      const dateToUse = t.updatedAt || t.createdAt;
+      const completionDateStr = new Date(dateToUse).toISOString().split('T')[0];
       return completionDateStr === dateStr;
     }).length;
 

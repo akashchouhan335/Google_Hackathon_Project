@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('./config');
 
 // Initialize database
-require('./db/jsonDb');
+require('./db/firestore');
 
 const app = express();
 
@@ -56,4 +56,8 @@ app.listen(config.PORT, () => {
   console.log(`Deadline Guardian AI Server is running on port ${config.PORT}`);
   console.log(`Environment: ${config.NODE_ENV}`);
   console.log(`==================================================`);
+  
+  // Start the background agent to check for overdue tasks
+  const { startDeadlineAgent } = require('./services/deadlineAgent');
+  startDeadlineAgent(30000); // Check every 30 seconds
 });

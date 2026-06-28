@@ -1,5 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { api } from '../utils/api';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 
 const AuthContext = createContext();
 
@@ -15,31 +17,29 @@ export function AuthProvider({ children }) {
       setUser(profile);
       applyTheme(profile.settings?.theme || 'light');
     } catch (err) {
-      console.warn('Failed to load user profile on startup:', err.message);
+      console.warn('Failed to load user profile:', err.message);
       setUser(null);
-      localStorage.removeItem('dg_token');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('dg_token');
-    if (token) {
-      fetchProfile();
-    } else {
-      setLoading(false);
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        await fetchProfile();
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const login = async (credentials) => {
     setError(null);
     try {
-      const response = await api.auth.login(credentials);
-      localStorage.setItem('dg_token', response.token);
-      setUser(response.user);
-      applyTheme(response.user.settings?.theme || 'light');
-      return response.user;
+      await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
     } catch (err) {
       setError(err.message || 'Login failed.');
       throw err;
@@ -49,19 +49,18 @@ export function AuthProvider({ children }) {
   const register = async (userData) => {
     setError(null);
     try {
-      const response = await api.auth.register(userData);
-      localStorage.setItem('dg_token', response.token);
-      setUser(response.user);
-      applyTheme(response.user.settings?.theme || 'light');
-      return response.user;
+      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+      // Wait for auth state change to trigger profile fetch, but we also need to tell the backend to save the user's name
+      await api.auth.register({ email: userData.email, name: userData.name });
+      await fetchProfile();
     } catch (err) {
       setError(err.message || 'Registration failed.');
       throw err;
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('dg_token');
+  const logout = async () => {
+    await signOut(auth);
     setUser(null);
   };
 
@@ -82,7 +81,7 @@ export function AuthProvider({ children }) {
   };
 
   const reloadUser = async () => {
-    if (localStorage.getItem('dg_token')) {
+    if (auth.currentUser) {
       await fetchProfile();
     }
   };
@@ -100,7 +99,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? null : children}
     </AuthContext.Provider>
   );
 }

@@ -1,56 +1,45 @@
-const db = require('../db/jsonDb');
+const db = require('../db/firestore');
+const ai = require('./geminiService');
 
 /**
- * Automatically updates all schedules for a user when a task is completed or deleted.
- * Replaces any slots allocated to the completed/deleted task with the next highest-priority active task,
- * or with a buffer slot if no other active tasks are available.
+ * Automatically regenerates today's schedule for a user.
+ * Called when tasks are created, updated, completed, or deleted to keep the dashboard schedule in sync.
  */
-function updateSchedulesOnTaskCompletion(userId, completedTaskId) {
+async function regenerateTodaySchedule(userId) {
   try {
-    const schedules = db.find('schedules', { userId });
-    if (schedules.length === 0) return;
+    const targetDate = new Date().toISOString().split('T')[0];
+    const existingSchedule = await db.findOne('schedules', { userId, date: targetDate });
+    
+    // If no schedule exists, we don't automatically generate one
+    if (!existingSchedule) return;
 
-    // Find the next available active task for the user (pending or in progress)
-    const activeTasks = db.find('tasks', { userId })
-      .filter(t => (t.status === 'pending' || t.status === 'in_progress') && t.id !== completedTaskId)
+    const availableHours = existingSchedule.availableHours || 6;
+
+    // Get active tasks (pending or in progress) and sort by priority
+    const activeTasks = (await db.find('tasks', { userId }))
+      .filter(t => t.status === 'pending' || t.status === 'in_progress')
       .sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
 
-    const nextTask = activeTasks[0]; // Highest priority pending/in_progress task
-
-    for (const sched of schedules) {
-      let modified = false;
-      const newAllocation = sched.allocation.map(slot => {
-        if (slot.taskId === completedTaskId) {
-          modified = true;
-          if (nextTask) {
-            return {
-              ...slot,
-              taskId: nextTask.id,
-              taskTitle: nextTask.title,
-              activity: `Focus deep work session on next priority task: ${nextTask.title}`
-            };
-          } else {
-            // Convert to buffer if no other tasks
-            return {
-              ...slot,
-              taskId: 'buffer',
-              taskTitle: 'Administrative Buffer & Catch-up',
-              activity: 'Process pending notifications, plan tomorrow\'s sprint milestones, or continue overdue tasks.'
-            };
-          }
-        }
-        return slot;
-      });
-
-      if (modified) {
-        db.update('schedules', { id: sched.id }, { allocation: newAllocation });
-      }
+    if (activeTasks.length === 0) {
+      // Clear the schedule allocations since there are no active tasks left
+      await db.update('schedules', { id: existingSchedule.id }, { allocation: [] });
+      return;
     }
+
+    const user = await db.findOne('users', { id: userId });
+    const workStartHour = user && user.settings ? user.settings.workStartHour : 9;
+
+    console.log(`Auto-regenerating schedule for user ${userId} with ${activeTasks.length} active tasks.`);
+    const result = await ai.runScheduleAgent(activeTasks, Number(availableHours), Number(workStartHour));
+
+    await db.update('schedules', { id: existingSchedule.id }, {
+      allocation: result.allocation
+    });
   } catch (err) {
-    console.error('Error updating schedules on task completion:', err.message);
+    console.error('Error auto-regenerating schedule:', err.message);
   }
 }
 
 module.exports = {
-  updateSchedulesOnTaskCompletion
+  regenerateTodaySchedule
 };

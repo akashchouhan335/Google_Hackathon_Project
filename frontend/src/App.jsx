@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { DataProvider } from './context/DataContext';
 import { api } from './utils/api';
 
 // Components
@@ -12,9 +13,9 @@ import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import TaskManagement from './pages/TaskManagement';
-import SchedulePage from './pages/SchedulePage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
+import SchedulePage from './pages/SchedulePage';
 
 function AppContent() {
   const { user } = useAuth();
@@ -40,17 +41,39 @@ function AppContent() {
     try {
       const list = await api.notifications.getAll();
       
-      // Check if we have new unread rescue alerts to trigger a toast overlay!
-      const unreadRescues = list.filter(n => !n.read && n.type === 'rescue_activated');
-      const oldRescueIds = notifications.filter(n => n.type === 'rescue_activated').map(n => n.id);
-      
-      unreadRescues.forEach(notif => {
-        if (!oldRescueIds.includes(notif.id)) {
-          triggerToast('rescue', 'Rescue mode activated!', notif.message);
+      setNotifications(prev => {
+        const unreadNotifs = list.filter(n => !n.read);
+        const oldIds = prev.map(n => n.id);
+        const newNotifs = unreadNotifs.filter(n => !oldIds.includes(n.id));
+        
+        if (newNotifs.length > 0) {
+          setTimeout(() => {
+            const seenMessages = new Set();
+            newNotifs.forEach(notif => {
+              if (!seenMessages.has(notif.message)) {
+                seenMessages.add(notif.message);
+                
+                let title = 'Notification';
+                let type = 'info';
+                
+                if (notif.type === 'rescue_activated') {
+                  title = 'Rescue mode activated!';
+                  type = 'rescue';
+                } else if (notif.message.includes('Rescue Mission Successful') || notif.message.includes('Completed:')) {
+                  title = 'Success!';
+                  type = 'success';
+                }
+                
+                triggerToast(type, title, notif.message);
+              }
+              // Automatically mark as read on the backend so they don't spam on reload
+              api.notifications.markRead(notif.id).catch(e => console.error(e));
+            });
+          }, 0);
         }
+        
+        return list;
       });
-
-      setNotifications(list);
     } catch (err) {
       console.error('Failed to poll notifications:', err.message);
     }
@@ -65,11 +88,11 @@ function AppContent() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [user, notifications]);
+  }, [user]);
 
   // Dynamic Toast trigger helper
   const triggerToast = (type, title, message) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random().toString(36).substr(2, 9);
     setToasts(prev => [...prev, { id, type, title, message }]);
     
     // Auto remove after 5 seconds
@@ -90,7 +113,7 @@ function AppContent() {
       case 'tasks':
         return <TaskManagement onTriggerToast={triggerToast} />;
       case 'schedule':
-        return <SchedulePage onTriggerToast={triggerToast} />;
+        return <SchedulePage />;
       case 'analytics':
         return <AnalyticsPage />;
       case 'settings':
@@ -142,7 +165,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <DataProvider>
+        <AppContent />
+      </DataProvider>
     </AuthProvider>
   );
 }

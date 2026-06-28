@@ -57,7 +57,8 @@ describe('Hackathon Judging Criteria - End-to-End System robustness', () => {
       .post('/api/schedule/generate')
       .set('Authorization', `Bearer ${token}`)
       .send({ availableHours: 4 });
-    expect(schedRes.status).toBe(200);
+    expect(schedRes.status).toBe(202);
+    expect(schedRes.body.isGenerating).toBe(true);
     expect(schedRes.body.allocation).toBeInstanceOf(Array);
 
     // 6. Complete focus session for normal task

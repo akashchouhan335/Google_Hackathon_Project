@@ -54,8 +54,12 @@ export default function AuthPage({ setCurrentPage }) {
       }
       setCurrentPage('dashboard');
     } catch (err) {
-      // AuthContext sets error state which is read from useAuth()
       console.error('Authentication attempt failed:', err);
+      if (err.message && err.message.includes('auth/invalid-credential')) {
+        setLocalError('Account not found in Firebase. Please click "Sign Up" below to recreate your account!');
+      } else {
+        setLocalError(err.message || 'Authentication failed');
+      }
     } finally {
       setLoading(false);
     }

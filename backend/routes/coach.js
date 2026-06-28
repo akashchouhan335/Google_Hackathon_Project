@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/jsonDb');
+const db = require('../db/firestore');
 const auth = require('../middleware/auth');
 const ai = require('../services/geminiService');
 
@@ -9,15 +9,15 @@ router.get('/insights', auth, async (req, res) => {
   
   try {
     // 1. Gather metrics
-    const tasks = db.find('tasks', { userId });
+    const tasks = await db.find('tasks', { userId });
     const completedTasks = tasks.filter(t => t.status === 'completed');
     const pendingTasks = tasks.filter(t => t.status !== 'completed');
-    const rescueModes = db.find('rescue_modes', { userId });
+    const rescueModes = await db.find('rescue_modes', { userId });
     const activeRescues = rescueModes.filter(r => r.status === 'active').length;
     const resolvedRescues = rescueModes.filter(r => r.status !== 'active');
     const successfulRescues = resolvedRescues.filter(r => r.status === 'resolved_success');
     
-    const focusSessions = db.find('focus_sessions', { userId });
+    const focusSessions = await db.find('focus_sessions', { userId });
     const startedSessions = focusSessions.filter(s => s.status !== 'active');
     const completedSessions = startedSessions.filter(s => s.status === 'completed');
 
@@ -46,7 +46,7 @@ router.get('/insights', auth, async (req, res) => {
     const coachResult = await ai.runCoachAgent(metrics, recentTasks);
 
     // Save insight snapshot to DB (optional, but tracks history)
-    db.insert('coach_insights', {
+    await db.insert('coach_insights', {
       userId,
       insights: coachResult.insights,
       focusRecommendations: coachResult.focusRecommendations,

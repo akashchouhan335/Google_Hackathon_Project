@@ -142,12 +142,12 @@ export function CircleGauge({ score = 0, title = '', subtitle = '', color = 'var
           />
         </svg>
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-          <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', display: 'block', lineHeight: '1' }}>
+          <span style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', display: 'block', lineHeight: '1' }}>
             {score}%
           </span>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{subtitle}</span>
         </div>
       </div>
+      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', fontWeight: 500 }}>{subtitle}</span>
     </div>
   );
 }

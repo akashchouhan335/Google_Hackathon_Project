@@ -425,7 +425,7 @@ All endpoints expect JSON request payloads and return JSON responses. Protected 
 ### Prerequisites
 * **Node.js**: Version 18.x or 20.x or higher.
 * **npm**: Version 9.x or higher.
-* **Gemini API Key**: (Optional but highly recommended) Access key from Google AI Studio.
+* **Gemini API Key**: Access key from Google AI Studio.
 
 ### Step-by-Step Installation
 
@@ -448,10 +448,19 @@ All endpoints expect JSON request payloads and return JSON responses. Protected 
    cp .env.example .env
    ```
    Open `.env` and insert your configurations:
-   * Set `PORT` (defaults to `5000` if not specified).
-   * Customize your `JWT_SECRET` key to ensure secure authorization encoding.
-   * Provide your `GEMINI_API_KEY` to link with the live Google AI Model.
-     *(If left blank, the application will run in local **Mock AI mode**).*
+   * **PORT**: The port the backend server listens on (defaults to `5000`).
+   * **JWT_SECRET**: Secure JWT signing key (recommend changing from default).
+   * **GEMINI_API_KEY**: Your API key from **[Google AI Studio](https://aistudio.google.com/)**.
+   * **GEMINI_MODEL**: The model identifier (defaults to `gemini-2.5-flash` for high performance, but can be set to `gemini-1.5-flash` if preferred).
+   
+   *Note: If no API key is provided, the application will run in heuristic **Mock AI mode**.*
+
+4. **Verify Your Setup (Diagnostics)**:
+   You can run the built-in system diagnostics tool to verify that your directory, dependencies, database, environment variables, and Gemini API connection are fully configured and functional:
+   ```bash
+   npm run diagnose
+   ```
+   This will test your API connection in real time and verify if the AI agents are active.
 
 ---
 

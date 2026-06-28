@@ -78,7 +78,7 @@ export default function Navbar({ setSidebarOpen, sidebarOpen, notifications, set
         <Menu size={20} />
       </button>
 
-      <div className="navbar-left">
+      <div className="navbar-left" style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/'}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Deadline Guardian AI</h2>
       </div>
 

@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/jsonDb');
+const db = require('../db/firestore');
 const auth = require('../middleware/auth');
 
 // Generate sprint parameters for a task
-router.post('/sprint', auth, (req, res) => {
+router.post('/sprint', auth, async (req, res) => {
   const { taskId } = req.body;
   if (!taskId) {
     return res.status(400).json({ error: 'taskId is required.' });
   }
 
-  const task = db.findOne('tasks', { id: taskId, userId: req.user.id });
+  const task = await db.findOne('tasks', { id: taskId, userId: req.user.id });
   if (!task) {
     return res.status(404).json({ error: 'Task not found or unauthorized.' });
   }
@@ -45,18 +45,18 @@ router.post('/sprint', auth, (req, res) => {
 });
 
 // Start a focus session (save to db)
-router.post('/session', auth, (req, res) => {
+router.post('/session', auth, async (req, res) => {
   const { taskId, goal, duration, breakDuration } = req.body;
   if (!taskId || !goal || !duration) {
     return res.status(400).json({ error: 'Please enter all required fields.' });
   }
 
-  const task = db.findOne('tasks', { id: taskId, userId: req.user.id });
+  const task = await db.findOne('tasks', { id: taskId, userId: req.user.id });
   if (!task) {
     return res.status(404).json({ error: 'Task not found or unauthorized.' });
   }
 
-  const newSession = db.insert('focus_sessions', {
+  const newSession = await db.insert('focus_sessions', {
     userId: req.user.id,
     taskId,
     goal,
@@ -69,7 +69,7 @@ router.post('/session', auth, (req, res) => {
 });
 
 // Complete or abandon focus session
-router.put('/session/:id', auth, (req, res) => {
+router.put('/session/:id', auth, async (req, res) => {
   const { status } = req.body; // 'completed' or 'abandoned'
   const sessionId = req.params.id;
 
@@ -77,18 +77,18 @@ router.put('/session/:id', auth, (req, res) => {
     return res.status(400).json({ error: 'Valid status ("completed" or "abandoned") is required.' });
   }
 
-  const session = db.findOne('focus_sessions', { id: sessionId, userId: req.user.id });
+  const session = await db.findOne('focus_sessions', { id: sessionId, userId: req.user.id });
   if (!session) {
     return res.status(404).json({ error: 'Focus session record not found.' });
   }
 
-  db.update('focus_sessions', { id: sessionId }, { status });
-  const updatedSession = db.findOne('focus_sessions', { id: sessionId });
+  await db.update('focus_sessions', { id: sessionId }, { status });
+  const updatedSession = await db.findOne('focus_sessions', { id: sessionId });
 
   // Add coach advice notification if completed
   if (status === 'completed') {
-    const task = db.findOne('tasks', { id: session.taskId });
-    db.insert('notifications', {
+    const task = await db.findOne('tasks', { id: session.taskId });
+    await db.insert('notifications', {
       userId: req.user.id,
       type: 'focus_reminder',
       message: `⚡ Focus Sprint completed! You spent ${session.duration} minutes on "${task ? task.title : 'Task'}". Great job!`,

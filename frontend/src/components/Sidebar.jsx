@@ -17,7 +17,7 @@ export default function Sidebar({ currentPage, setCurrentPage, sidebarOpen, setS
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks', label: 'Task Center', icon: CheckSquare },
-    { id: 'schedule', label: 'Daily Planner', icon: Calendar },
+    { id: 'schedule', label: 'AI Planner', icon: Calendar },
     { id: 'analytics', label: 'Productivity Labs', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -27,7 +27,7 @@ export default function Sidebar({ currentPage, setCurrentPage, sidebarOpen, setS
   return (
     <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
-        <div className="logo-container">
+        <div className="logo-container" onClick={() => setCurrentPage('dashboard')} style={{ cursor: 'pointer' }}>
           <ShieldAlert className="logo-icon" size={28} style={{ stroke: 'url(#logo-grad)' }} />
           <span>Guardian AI</span>
         </div>
@@ -77,7 +77,7 @@ export default function Sidebar({ currentPage, setCurrentPage, sidebarOpen, setS
           </div>
         </div>
         
-        <button className="nav-item" onClick={logout} style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', marginTop: '0.5rem' }}>
+        <button className="nav-item" onClick={logout} style={{ marginTop: '0.5rem' }}>
           <LogOut size={20} />
           <span>Logout</span>
         </button>

@@ -1,12 +1,14 @@
+import { auth } from '../firebase';
+
 // API Client Utility
 const API_BASE = '/api';
 
-function getHeaders() {
-  const token = localStorage.getItem('dg_token');
+async function getHeaders() {
   const headers = {
     'Content-Type': 'application/json'
   };
-  if (token) {
+  if (auth.currentUser) {
+    const token = await auth.currentUser.getIdToken();
     headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
@@ -14,10 +16,11 @@ function getHeaders() {
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
+  const resolvedHeaders = await getHeaders();
   const config = {
     ...options,
     headers: {
-      ...getHeaders(),
+      ...resolvedHeaders,
       ...options.headers
     }
   };
@@ -58,6 +61,7 @@ export const api = {
   // Tasks
   tasks: {
     getAll: () => request('/tasks'),
+    getById: (id) => request(`/tasks/${id}`),
     create: (taskData) => request('/tasks', {
       method: 'POST',
       body: JSON.stringify(taskData)
@@ -74,9 +78,9 @@ export const api = {
   // Schedule
   schedule: {
     get: (date) => request(`/schedule?date=${date || ''}`),
-    generate: (availableHours, date) => request('/schedule/generate', {
+    generate: (availableHours, date, startTime) => request('/schedule/generate', {
       method: 'POST',
-      body: JSON.stringify({ availableHours, date })
+      body: JSON.stringify({ availableHours, date, startTime })
     })
   },
 

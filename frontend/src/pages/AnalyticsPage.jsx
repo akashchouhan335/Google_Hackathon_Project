@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
+import { useData } from '../context/DataContext';
 import { TrendChart, CircleGauge, DistributionBar } from '../components/SvgCharts';
 import { 
   BarChart3, 
@@ -12,23 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function AnalyticsPage() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        setLoading(true);
-        const res = await api.analytics.get();
-        setData(res);
-      } catch (err) {
-        console.error('Failed to load analytics:', err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAnalytics();
-  }, []);
+  const { analytics: data, loading } = useData();
 
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '4rem 0' }}>Consulting Productivity Analyst...</div>;
@@ -45,6 +30,12 @@ export default function AnalyticsPage() {
     deadlineCompletionRate: 100
   };
 
+  const getDynamicAnalyticsSubtitle = (score) => {
+    if (score >= 80) return "Your analytics reflect strong, consistent habits. Keep it up!";
+    if (score >= 50) return "Your metrics show average consistency. Let's optimize your workflow.";
+    return "Your analytics indicate a need for a productivity intervention.";
+  };
+
   const charts = data?.charts || {
     completionTrend: [],
     productivityTrend: [],
@@ -56,7 +47,7 @@ export default function AnalyticsPage() {
       {/* Title */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2.25rem', fontWeight: 800 }}>Productivity Labs</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Review advanced analytics, focus sprint metrics, and rescue mission statistics.</p>
+        <p style={{ color: 'var(--text-secondary)' }}>{getDynamicAnalyticsSubtitle(summary.productivityScore)}</p>
       </div>
 
       {/* SVG Score Circle Gauges */}

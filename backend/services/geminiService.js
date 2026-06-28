@@ -1,12 +1,9 @@
-const { GoogleGenAI } = require('@google/generative-ai');
 const config = require('../config');
 
 // Initialize Gemini API if key is present
 let genAI = null;
 if (config.GEMINI_API_KEY) {
   try {
-    // If the package uses GoogleGenAI or GoogleGenerativeAI
-    // The standard package has: const { GoogleGenerativeAI } = require('@google/generative-ai');
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
     console.log('Gemini API client initialized successfully.');
@@ -17,23 +14,52 @@ if (config.GEMINI_API_KEY) {
   console.log('No GEMINI_API_KEY found. Running in high-fidelity Mock AI fallback mode.');
 }
 
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL_MS = 4500; // 4.5 seconds between API requests to stay under free tier (15 RPM)
+
+async function waitIfNeeded() {
+  const now = Date.now();
+  const timeSinceLast = now - lastRequestTime;
+  if (timeSinceLast < MIN_REQUEST_INTERVAL_MS) {
+    const delay = MIN_REQUEST_INTERVAL_MS - timeSinceLast;
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  lastRequestTime = Date.now();
+}
+
+let circuitBreakerTrippedUntil = 0;
+
 /**
  * Call Gemini model with a structured prompt expecting JSON response
  */
 async function callGemini(systemInstruction, userPrompt, fallbackFn) {
+  if (Date.now() < circuitBreakerTrippedUntil) {
+    const remainingMins = Math.ceil((circuitBreakerTrippedUntil - Date.now()) / 60000);
+    console.warn(`[Gemini API] Circuit breaker is active for ~${remainingMins} more min(s). Falling back to Mock AI instantly.`);
+    return fallbackFn();
+  }
+
   if (!genAI) {
     return fallbackFn();
   }
 
-  try {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-      }
-    });
+  const maxRetries = 3;
+  let attempt = 0;
 
-    const prompt = `
+  while (attempt < maxRetries) {
+    attempt++;
+    try {
+      // Ensure minimum interval between requests
+      await waitIfNeeded();
+
+      const model = genAI.getGenerativeModel({
+        model: config.GEMINI_MODEL || 'gemini-2.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+        }
+      });
+
+      const prompt = `
 System Instructions:
 ${systemInstruction}
 
@@ -43,20 +69,47 @@ ${userPrompt}
 Ensure your response is valid JSON matching the exact schema specified in instructions. Do not include markdown code block characters like \`\`\`json. Return only the JSON string.
 `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
-    
-    // Clean markdown wrappers if returned despite responseMimeType
-    let cleanedText = text;
-    if (text.startsWith('```')) {
-      cleanedText = text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-    }
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+      
+      // Clean markdown wrappers if returned despite responseMimeType
+      let cleanedText = text;
+      if (text.startsWith('```')) {
+        cleanedText = text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+      }
 
-    return JSON.parse(cleanedText);
-  } catch (err) {
-    console.warn('Gemini API call failed, falling back to Mock AI:', err.message);
-    return fallbackFn();
+      return JSON.parse(cleanedText);
+    } catch (err) {
+      const isQuotaExhausted = err.message.includes('Quota exceeded') || (err.message.includes('429 Too Many Requests') && err.message.includes('generativelanguage'));
+      
+      if (isQuotaExhausted) {
+        console.warn(`[Gemini API] Quota Exceeded detected! Tripping circuit breaker for 15 minutes.`);
+        circuitBreakerTrippedUntil = Date.now() + 15 * 60 * 1000;
+        break; // Stop retrying immediately
+      }
+
+      const isRateLimit = err.message.includes('429') || err.message.includes('Quota exceeded') || err.message.includes('Too Many Requests');
+      
+      if (isRateLimit && attempt < maxRetries) {
+        // Try to parse wait time from error message, e.g. "Please retry in 28.286136477s."
+        let waitMs = Math.pow(2, attempt) * 2000; // Default exponential backoff (4s, 8s, etc.)
+        const match = err.message.match(/retry in ([\d.]+)\s*s/i);
+        if (match && match[1]) {
+          waitMs = Math.ceil(parseFloat(match[1]) * 1000) + 500; // Add 500ms safety buffer
+        }
+        
+        console.warn(`[Gemini API] Rate limit hit (429). Retrying in ${Math.round(waitMs / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        continue;
+      }
+
+      console.warn(`[Gemini API] Call failed (Attempt ${attempt}/${maxRetries}):`, err.message);
+      break;
+    }
   }
+
+  console.warn('[Gemini API] Falling back to Mock AI.');
+  return fallbackFn();
 }
 
 /**
@@ -288,9 +341,15 @@ Response JSON Schema:
 async function runScheduleAgent(tasks, availableHours, workStartHour) {
   const systemInstruction = `
 You are the Schedule Agent of Deadline Guardian AI.
-Your job is to allocate task hours into a daily timeline structure starting at a specific workStartHour.
-Tasks have title, estimatedHours, priorityScore, and riskScore.
+Your job is to allocate task hours into a daily timeline structure.
+Tasks have title, estimatedHours, priorityLevel, priorityScore, riskScore, and deadline.
 Allocate blocks in chunks of 30, 60, or 90 minutes.
+
+IMPORTANT: You MUST start the very first time slot at the EXACT \`workStartTime\` provided in the JSON.
+IMPORTANT: You MUST schedule the first task to begin EXACTLY at the \`workStartTime\` without any delay. Do NOT shift the start time later.
+IMPORTANT: You MUST schedule tasks sequentially and contiguously. Do NOT leave any unexplained gaps in time.
+IMPORTANT: You MUST arrange and schedule the tasks strictly according to a combination of their priorityLevel (High > Medium > Low) and their deadline date (earliest first).
+IMPORTANT: Only schedule buffer or catch-up slots ("taskId": "buffer") if there are tasks with high riskScore (>= 80) or if a task is overdue. If all tasks are low/medium risk and not overdue, do NOT schedule any buffer slots; let the timeline end once all tasks and breaks are scheduled.
 
 Response JSON Schema:
 {
@@ -310,11 +369,13 @@ Response JSON Schema:
       id: t.id,
       title: t.title,
       estimatedHours: t.estimatedHours,
+      priorityLevel: t.priorityLevel,
       priorityScore: t.priorityScore,
-      riskScore: t.riskScore
+      riskScore: t.riskScore,
+      deadline: t.deadline
     })),
     availableHours,
-    workStartHour
+    workStartTime: `${Math.floor(workStartHour).toString().padStart(2, '0')}:${Math.round((workStartHour % 1) * 60).toString().padStart(2, '0')}`
   });
 
   const fallbackFn = () => {
@@ -322,8 +383,14 @@ Response JSON Schema:
     const allocation = [];
     let currentHour = workStartHour;
     
-    // Sort tasks by priority score (descending)
-    const sortedTasks = [...tasks].sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+    // Sort tasks by priority Level (descending), then by deadline date (ascending)
+    const sortedTasks = [...tasks].sort((a, b) => {
+      const levelMap = { 'high': 3, 'medium': 2, 'low': 1 };
+      const aLevel = levelMap[a.priorityLevel] || 0;
+      const bLevel = levelMap[b.priorityLevel] || 0;
+      if (bLevel !== aLevel) return bLevel - aLevel;
+      return new Date(a.deadline || 0).getTime() - new Date(b.deadline || 0).getTime();
+    });
     
     const padTime = (h) => {
       const hrs = Math.floor(h);
@@ -368,10 +435,14 @@ Response JSON Schema:
       }
     }
 
-    // Fill remaining hours with buffer
-    if (remainingHoursAvailable > 0) {
+    // Fill remaining hours with buffer ONLY if there is at least one high-risk task (riskScore >= 80)
+    // or if a task's deadline is overdue (has already passed)
+    const hasHighRiskOrOverdue = tasks.some(t => t.riskScore >= 80 || new Date(t.deadline) < new Date());
+
+    if (remainingHoursAvailable > 0 && hasHighRiskOrOverdue) {
       const bufferStart = padTime(currentHour);
-      currentHour += remainingHoursAvailable;
+      const bufferDuration = Math.min(1.5, remainingHoursAvailable); // Limit buffer to max 1.5 hours
+      currentHour += bufferDuration;
       const bufferEnd = padTime(currentHour);
       
       allocation.push({
@@ -381,11 +452,106 @@ Response JSON Schema:
         activity: 'Process pending notifications, plan tomorrow\'s sprint milestones, or continue overdue tasks.'
       });
     }
-
     return { allocation };
   };
 
-  return callGemini(systemInstruction, userPrompt, fallbackFn);
+  const rawResult = await callGemini(systemInstruction, userPrompt, fallbackFn);
+
+  if (rawResult && Array.isArray(rawResult.allocation)) {
+    // Force sort tasks by priority to ensure LLM compliance
+    const finalAllocation = [];
+    const taskSlots = [];
+    const nonTaskSlots = [];
+
+    // Extract all slots
+    rawResult.allocation.forEach(slot => {
+      if (slot.taskId === 'break' || slot.taskId === 'buffer') {
+        nonTaskSlots.push(slot);
+      } else {
+        taskSlots.push(slot);
+      }
+    });
+
+    // Map task slots to their actual task data for sorting
+    const mappedTaskSlots = taskSlots.map((slot, index) => {
+      const task = tasks.find(t => String(t.id) === String(slot.taskId));
+      return {
+        originalSlot: slot,
+        originalIndex: index,
+        priorityLevel: task ? task.priorityLevel : 'low',
+        deadline: task ? task.deadline : null
+      };
+    });
+
+    // Sort by priorityLevel > deadline > originalIndex
+    mappedTaskSlots.sort((a, b) => {
+      const levelMap = { 'high': 3, 'medium': 2, 'low': 1 };
+      const aLevel = levelMap[a.priorityLevel?.toLowerCase()] || 0;
+      const bLevel = levelMap[b.priorityLevel?.toLowerCase()] || 0;
+      
+      if (bLevel !== aLevel) return bLevel - aLevel;
+      
+      const aTime = new Date(a.deadline || 0).getTime();
+      const bTime = new Date(b.deadline || 0).getTime();
+      
+      if (aTime !== bTime) return aTime - bTime;
+      
+      return a.originalIndex - b.originalIndex;
+    });
+
+    // Re-assign task slots in the newly sorted order, preserving time slots
+    let taskIdx = 0;
+    let nonTaskIdx = 0;
+
+    for (let i = 0; i < rawResult.allocation.length; i++) {
+      const originalSlot = rawResult.allocation[i];
+      if (originalSlot.taskId === 'break' || originalSlot.taskId === 'buffer') {
+        finalAllocation.push({
+          ...nonTaskSlots[nonTaskIdx],
+          timeSlot: originalSlot.timeSlot // enforce timeline constraint
+        });
+        nonTaskIdx++;
+      } else {
+        finalAllocation.push({
+          ...mappedTaskSlots[taskIdx].originalSlot,
+          timeSlot: originalSlot.timeSlot // enforce timeline constraint
+        });
+        taskIdx++;
+      }
+    }
+
+    rawResult.allocation = finalAllocation;
+  }
+
+  // Extract the allocation array robustly
+  let allocation = null;
+  if (rawResult && Array.isArray(rawResult.allocation)) {
+    allocation = rawResult.allocation;
+  } else if (rawResult && Array.isArray(rawResult)) {
+    allocation = rawResult;
+  } else if (rawResult && Array.isArray(rawResult.schedule)) {
+    allocation = rawResult.schedule;
+  } else if (rawResult && Array.isArray(rawResult.timeline)) {
+    allocation = rawResult.timeline;
+  }
+
+  // If no valid array is found, run fallback function
+  if (!allocation || !Array.isArray(allocation) || allocation.length === 0) {
+    console.warn('[Schedule Agent] Gemini response did not contain a valid allocation array. Using fallback.', rawResult);
+    return fallbackFn();
+  }
+
+  // Normalize slots to ensure no undefined property crashes
+  const sanitizedAllocation = allocation.map(slot => {
+    return {
+      timeSlot: slot.timeSlot || '00:00 - 00:00',
+      taskId: slot.taskId !== undefined ? String(slot.taskId) : 'buffer',
+      taskTitle: slot.taskTitle || 'Activity block',
+      activity: slot.activity || 'Focus work block'
+    };
+  });
+
+  return { allocation: sanitizedAllocation };
 }
 
 /**
