@@ -90,7 +90,7 @@ graph TD
         Server[Express Server / server.js]
         AuthMid[Auth Middleware / middleware/auth.js]
         Routes[API Routes / routes/*]
-        DB[JSON DB Handler / db/jsonDb.js]
+        DB[Firestore Handler / db/firestore.js]
         Gemini[Gemini Service / services/geminiService.js]
         
         API -->|HTTP Requests + Bearer JWT| Server
@@ -101,7 +101,7 @@ graph TD
     end
 
     subgraph Storage [Data Layer]
-        DBFile[(File Database / data/db.json)]
+        DBFile[(Firebase / Firestore Cloud DB)]
         DB --> DBFile
     end
 
@@ -115,14 +115,14 @@ graph TD
 ### Components Summary:
 - **Frontend Client**: Built with **React 19** and **Vite** for rapid hot module replacement. Styles are authored in native **Vanilla CSS** for performance and control. Rich UI dashboards include custom SVG-rendered charts and an interactive Pomodoro-style timer.
 - **Backend API**: A RESTful **Node.js Express** server. Incoming requests are filtered through JSON Web Token (JWT) verification middleware to guarantee security.
-- **Database Engine**: A custom, low-latency, file-based JSON database wrapper (`jsonDb.js`) that performs transactional reads/writes on a local JSON file (`data/db.json`).
+- **Database Engine**: Integrated with **Google Cloud Firestore** using the Firebase Admin SDK (`firestore.js`) for scalable, low-latency document storage.
 - **AI Integrations**: Implemented using the official `@google/generative-ai` SDK. In environments where no API key is specified, the system automatically runs a high-fidelity heuristic fallback engine, ensuring the app remains fully functional off-line or during local development.
 
 ---
 
 ## 4. Database Schema
 
-The system utilizes a file-based JSON schema with the following collections (tables):
+The system utilizes Google Cloud Firestore as its primary data store, using the following NoSQL document collections:
 
 ### `users`
 Represents the user account credentials and profile configurations.
@@ -455,7 +455,12 @@ All endpoints expect JSON request payloads and return JSON responses. Protected 
    
    *Note: If no API key is provided, the application will run in heuristic **Mock AI mode**.*
 
-4. **Verify Your Setup (Diagnostics)**:
+4. **Configure Firebase Admin Credentials**:
+   To connect the backend to Google Cloud Firestore, you must provide a Firebase Service Account key.
+   * Generate a new private key from your Firebase Project Console (`Project Settings` > `Service Accounts` > `Generate new private key`).
+   * Save the downloaded JSON file as `backend/firebase-service-account.json`.
+
+5. **Verify Your Setup (Diagnostics)**:
    You can run the built-in system diagnostics tool to verify that your directory, dependencies, database, environment variables, and Gemini API connection are fully configured and functional:
    ```bash
    npm run diagnose

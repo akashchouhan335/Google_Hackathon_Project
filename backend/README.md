@@ -21,4 +21,4 @@ To run the tests with a coverage report:
 ```bash
 npm run test:coverage
 ```
-Ensure that you have created and configured a `.env` file in this directory based on the `.env.example` file.
+Ensure that you have created and configured a `.env` file in this directory based on the `.env.example` file, and placed your `firebase-service-account.json` in this directory.
