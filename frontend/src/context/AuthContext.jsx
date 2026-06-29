@@ -99,7 +99,14 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? null : children}
+      {loading ? (
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
+          <div style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.1)', borderLeftColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+          <h2 style={{ marginTop: '20px', fontSize: '1.5rem', fontWeight: 'bold' }}>Loading Deadline Guardian AI...</h2>
+          <p style={{ marginTop: '10px', color: '#94a3b8', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' }}>Please wait a moment. If the server is waking up from sleep mode, this may take up to 50 seconds.</p>
+        </div>
+      ) : children}
     </AuthContext.Provider>
   );
 }
