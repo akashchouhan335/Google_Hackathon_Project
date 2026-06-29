@@ -106,7 +106,7 @@ graph TD
     end
 
     subgraph AI [AI Layer]
-        GeminiSDK[@google/generative-ai]
+        GeminiSDK["@google/generative-ai"]
         Gemini --> GeminiSDK
         GeminiSDK -.->|API Calls| GeminiAPI[Gemini 1.5 Flash API]
     end
