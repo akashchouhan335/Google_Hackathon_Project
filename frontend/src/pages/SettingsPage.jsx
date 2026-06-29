@@ -59,10 +59,10 @@ export default function SettingsPage({ onTriggerToast }) {
 
               <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--bg-tertiary)', paddingTop: '0.75rem' }}>
                 <h4 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.25rem' }}>
-                  <HelpCircle size={14} /> Activating Gemini Pro
+                  <Sparkles size={14} /> Our AI Agents
                 </h4>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: '1.4' }}>
-                  To toggle active live Gemini connections, navigate to your project directory and set the `GEMINI_API_KEY` variable in `backend/.env`. Re-run the server to apply changes.
+                  Our specialized AI agents work in tandem to break down your tasks, estimate completion times, assign realistic deadlines, and provide intelligent scheduling recommendations to boost your productivity.
                 </p>
               </div>
             </div>
