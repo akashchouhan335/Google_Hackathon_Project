@@ -33,6 +33,11 @@ app.get('/', (req, res) => {
   res.json({ message: 'Deadline Guardian AI Backend API is active.' });
 });
 
+// Health check endpoints for uptime monitors (like cron-job.org)
+app.get('/ping', (req, res) => res.status(200).send('pong'));
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('Unhandled Server Error:', err);
