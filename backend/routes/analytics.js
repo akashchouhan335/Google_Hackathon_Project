@@ -14,7 +14,8 @@ router.get('/', auth, async (req, res) => {
   
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'completed');
-  const pendingTasks = tasks.filter(t => t.status !== 'completed');
+  const pendingTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'incomplete');
+  const missedTasks = tasks.filter(t => t.status === 'incomplete');
   
   // High risk tasks (risk >= 80 and not completed)
   const highRiskTasks = pendingTasks.filter(t => t.riskScore >= 80);
@@ -101,6 +102,7 @@ router.get('/', auth, async (req, res) => {
       totalTasks,
       completedTasks: completedTasks.length,
       pendingTasks: pendingTasks.length,
+      missedTasks: missedTasks.length,
       highRiskTasks: highRiskTasks.length,
       productivityScore,
       focusConsistency,

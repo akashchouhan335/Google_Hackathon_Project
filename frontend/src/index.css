@@ -580,6 +580,7 @@ button, input, select, textarea {
 .stat-card.purple .stat-icon-box { background-color: rgba(124, 58, 237, 0.1); color: var(--primary-purple); }
 .stat-card.red .stat-icon-box { background-color: rgba(239, 68, 68, 0.1); color: var(--danger); }
 .stat-card.green .stat-icon-box { background-color: rgba(16, 185, 129, 0.1); color: var(--success); }
+.stat-card.orange .stat-icon-box { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); }
 
 /* Deadline Rescue Widget Dashboard */
 .rescue-panel-danger {

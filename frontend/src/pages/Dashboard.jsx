@@ -13,7 +13,8 @@ import {
   Calendar,
   Zap,
   Sparkles,
-  ClipboardList
+  ClipboardList,
+  XCircle
 } from 'lucide-react';
 
 export default function Dashboard({ onTriggerToast }) {
@@ -82,6 +83,7 @@ export default function Dashboard({ onTriggerToast }) {
     totalTasks: 0,
     completedTasks: 0,
     pendingTasks: 0,
+    missedTasks: 0,
     highRiskTasks: 0,
     productivityScore: 70
   };
@@ -134,6 +136,16 @@ export default function Dashboard({ onTriggerToast }) {
           <div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>Completed</span>
             <h3 style={{ fontSize: '1.75rem', fontWeight: 800 }}>{summary.completedTasks}</h3>
+          </div>
+        </div>
+
+        <div className="glass-card stat-card orange">
+          <div className="stat-icon-box">
+            <XCircle size={22} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>Missed Tasks</span>
+            <h3 style={{ fontSize: '1.75rem', fontWeight: 800 }}>{summary.missedTasks}</h3>
           </div>
         </div>
 
