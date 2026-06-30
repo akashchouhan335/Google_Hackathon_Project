@@ -9,11 +9,30 @@ const { regenerateTodaySchedule } = require('../services/scheduleHelper');
 router.get('/', auth, async (req, res) => {
   const tasks = await db.find('tasks', { userId: req.user.id });
   
+  // Cleanup missed tasks before sorting
+  let updatedTasks = [];
+  const now = new Date();
+  for (let task of tasks) {
+    if (new Date(task.deadline) < now && task.status !== 'completed' && task.status !== 'incomplete') {
+      await db.update('tasks', { id: task.id }, { status: 'incomplete' });
+      task.status = 'incomplete';
+      
+      const activeRescue = await db.findOne('rescue_modes', { taskId: task.id, status: 'active' });
+      if (activeRescue) {
+        await db.update('rescue_modes', { id: activeRescue.id }, { status: 'resolved_failed', resolvedAt: new Date().toISOString() });
+      }
+    }
+    updatedTasks.push(task);
+  }
+
   // Sort tasks: pending/in_progress first, then by priority Score descending, then deadline ascending
-  const sorted = tasks.sort((a, b) => {
-    const statusOrder = { 'in_progress': 0, 'pending': 1, 'completed': 2 };
-    if (statusOrder[a.status] !== statusOrder[b.status]) {
-      return statusOrder[a.status] - statusOrder[b.status];
+  const sorted = updatedTasks.sort((a, b) => {
+    const statusOrder = { 'in_progress': 0, 'pending': 1, 'completed': 2, 'incomplete': 3 };
+    const aStatus = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 1;
+    const bStatus = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 1;
+    
+    if (aStatus !== bStatus) {
+      return aStatus - bStatus;
     }
     const levelMap = { 'high': 3, 'medium': 2, 'low': 1 };
     const aLevel = levelMap[a.priorityLevel] || 0;

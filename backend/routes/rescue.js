@@ -11,6 +11,17 @@ router.get('/active', auth, async (req, res) => {
   // Attach task details to each rescue mode
   const rescuesWithTask = (await Promise.all(activeRescues.map(async rescue => {
     const task = await db.findOne('tasks', { id: rescue.taskId });
+    
+    if (task && new Date(task.deadline) < new Date() && task.status !== 'completed') {
+      // Deadline has passed. Mark as incomplete and resolve rescue as failed.
+      await db.update('tasks', { id: task.id }, { status: 'incomplete' });
+      await db.update('rescue_modes', { id: rescue.id }, {
+        status: 'resolved_failed',
+        resolvedAt: new Date().toISOString()
+      });
+      return null;
+    }
+
     return {
       ...rescue,
       task: task ? {
@@ -20,7 +31,7 @@ router.get('/active', auth, async (req, res) => {
         priorityLevel: task.priorityLevel
       } : null
     };
-  }))).filter(r => r.task !== null); // Filter out orphaned records
+  }))).filter(r => r !== null && r.task !== null); // Filter out orphaned records or missed tasks
 
   res.json(rescuesWithTask);
 });
