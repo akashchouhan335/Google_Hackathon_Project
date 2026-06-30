@@ -583,28 +583,64 @@ Response JSON Schema:
   const fallbackFn = () => {
     let focusConsistency = metrics.focusConsistency || 0;
     let rescueSuccessRate = metrics.rescueSuccessRate || 0;
+    let completedTasks = metrics.completedTasks || 0;
+    let pendingTasks = metrics.pendingTasks || 0;
+    let activeRescues = metrics.activeRescues || 0;
 
-    let insights = [
-      `Your current focus sprint consistency is sitting at ${focusConsistency}%. You perform exceptionally well during morning blocks.`,
-      `Active Rescue Operations: ${metrics.activeRescues || 0} tasks are currently in critical danger, demanding tight boundary management.`,
-      `Task velocity is strong: you completed ${metrics.completedTasks || 0} tasks over the recent timeframe.`
-    ];
-
-    let focusRecommendations = [
-      `Start work with a single 25-minute Pomodoro style Focus Sprint for your highest priority task to build momentum.`,
-      `Set up your daily planner calendar early in the morning so you don't exhaust decision energy on 'what to do next'.`
-    ];
-
-    let habitTips = [
-      `Implement the 2-Minute Rule: if a task checkoff or update takes less than two minutes, complete it immediately.`,
-      `Perform a Sunday Evening Reset: Spend 10 minutes reviewing deadlines for the upcoming week and scheduling buffer blocks.`
-    ];
-
-    if (focusConsistency < 60) {
-      focusRecommendations.unshift(`Your focus completion rate is low. Try shortening sprint durations from 50 minutes down to 25 minutes to increase completion success.`);
+    let insights = [];
+    
+    if (focusConsistency >= 80) {
+      insights.push(`Excellent focus consistency at ${focusConsistency}%. You are maintaining strong concentration during your sessions.`);
+    } else if (focusConsistency >= 50) {
+      insights.push(`Your focus consistency is ${focusConsistency}%. There's room for improvement in completing your sessions without interruptions.`);
+    } else {
+      insights.push(`Focus consistency is currently low at ${focusConsistency}%. Try to minimize distractions during your planned work blocks.`);
     }
+
+    if (activeRescues > 0) {
+      insights.push(`You currently have ${activeRescues} active rescue operations. Prioritize these tasks as they are in critical danger.`);
+    } else {
+      insights.push(`Great job keeping up! You have no active rescue operations at the moment.`);
+    }
+
+    if (completedTasks > pendingTasks) {
+      insights.push(`Task velocity is strong: you have completed ${completedTasks} tasks, outpacing your ${pendingTasks} pending tasks.`);
+    } else if (completedTasks > 0) {
+       insights.push(`You have completed ${completedTasks} tasks, with ${pendingTasks} still pending. Keep pushing forward.`);
+    } else {
+      insights.push(`You have ${pendingTasks} pending tasks waiting to be started. Let's build some momentum!`);
+    }
+
+    let focusRecommendations = [];
+
+    if (activeRescues > 0) {
+       focusRecommendations.push(`Allocate your next focus sprint strictly to resolving your active rescue tasks.`);
+    }
+    if (focusConsistency < 60) {
+      focusRecommendations.push(`Since your focus completion rate is low, try shortening sprint durations down to 25 minutes to build endurance.`);
+    } else {
+       focusRecommendations.push(`Your focus is strong. Consider tackling your most complex task in a 50-minute deep work block.`);
+    }
+    if (pendingTasks > 5) {
+       focusRecommendations.push(`With a high number of pending tasks, break them down into smaller sub-tasks to avoid feeling overwhelmed.`);
+    } else {
+       focusRecommendations.push(`Start work with a single Pomodoro Focus Sprint on your highest priority task to build momentum.`);
+    }
+
+    let habitTips = [];
+
     if (rescueSuccessRate < 50 && metrics.totalRescues > 0) {
-      insights.push(`Your rescue resolution success rate is ${rescueSuccessRate}%. This suggests estimated task hours are under-budgeted during initial planning stages.`);
+      habitTips.push(`Your rescue success rate is ${rescueSuccessRate}%. Consider budgeting more time during initial planning stages to prevent tasks from slipping.`);
+    } else if (metrics.totalRescues > 0) {
+      habitTips.push(`You've successfully managed rescues with a ${rescueSuccessRate}% success rate. Review what went wrong initially to prevent future rescues.`);
+    } else {
+       habitTips.push(`You've avoided rescue situations completely! Consistently review deadlines weekly to maintain this proactive habit.`);
+    }
+    
+    if (completedTasks === 0) {
+       habitTips.push(`Implement the 2-Minute Rule: if a task checkoff or update takes less than two minutes, complete it immediately to get a quick win.`);
+    } else {
+       habitTips.push(`Perform a daily wrap-up: spend 5 minutes at the end of the day planning tomorrow's sprint milestones.`);
     }
 
     return { insights, focusRecommendations, habitTips };
